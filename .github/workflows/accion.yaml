@@ -16,7 +16,7 @@ env:
   IMAGE: proyectv1
   HEALTHCHECK: \/ #verificar que compila la app dentro del docker
   CONTAINERPORT: 80 #puerto que va a leer el conteiner
-  HOST: plans.twist.com.ar
+  HOST: ingsw.shuhariko.com.ar
 
 jobs:
   build-publish-image:
