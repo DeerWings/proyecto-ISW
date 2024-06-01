@@ -5,7 +5,7 @@
 replicaCount: 1
 
 image:
-  repository: docker.io/twistorgar
+  repository: docker.io/ericdeppeler
   name_app: ${{ IMAGE }}
   pullPolicy: Always
   # Overrides the image tag whose default is the chart appVersion.
