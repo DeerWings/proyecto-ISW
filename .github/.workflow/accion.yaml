@@ -1,0 +1,94 @@
+name: build-publish-deploy
+
+# This workflow uses actions that are not certified by GitHub.
+# They are provided by a third-party and are governed by
+# separate terms of service, privacy policy, and support
+# documentation.
+on:
+  push:
+    branches: [ "develop" ]
+    # Publish semver tags as releases.
+    tags: [ 'v*.*.*' ]
+  pull_request:
+    branches: [ "develop" ]
+env:
+  SERVER: docker.io
+  IMAGE: proyectv1
+  HEALTHCHECK: \/ #verificar que compila la app dentro del docker
+  CONTAINERPORT: 80 #puerto que va a leer el conteiner
+  HOST: plans.twist.com.ar
+
+jobs:
+  build-publish-image:
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/develop'
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: "Docker Hub repository login 💠"
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DKR_USR }}
+          password: ${{ secrets.DKR_PSW }}
+
+      - name: "Build image and publish it 🐳"
+        shell: bash
+        run: |
+          # Building image with binaries
+          cd app && docker build . -t ${{ env.SERVER }}/${{ secrets.DKR_USR }}/${{ env.IMAGE }}:${{ github.sha }}
+          # Pushing image to repository
+          docker push ${{ env.SERVER }}/${{ secrets.DKR_USR }}/${{ env.IMAGE }}:${{ github.sha }}
+      
+      - name: "Notify status of failure job"
+        if: ${{ failure() }}
+        run: |
+          curl -X POST -H "Content-Type: application/json" \
+          -d '{"content": "Something in build or push of image 📸 ${{ env.SERVER }}/${{ secrets.DKR_USR }}/${{ env.IMAGE }}:${{ github.sha }} was wrong! 🐳\nStatus: `${{ job.status }}` 💥👻 \nAutor: @${{ github.actor }}"}' \
+          ${{ secrets.DSC_WH_URL }}
+          
+  deploy-app:
+    runs-on: ubuntu-latest
+    needs: [build-publish-image]
+    steps:
+      - uses: actions/checkout@v3
+      
+      # Get the name of each branch where running
+      - name: "Getting name of branch 🌿"
+        id: vars
+        run: echo ::set-output name=branch::${GITHUB_REF#refs/*/} # ${{ steps.vars.outputs.branch }}
+
+      # Connecting to srv and running helm commands to initialize or upgrade charts
+      - name: "Deploying Helm App 🚀"
+        run: |
+          mkdir ~/.kube && echo "${{ secrets.KUBE_CONFIG }}" > ~/.kube/config && export KUBECONFIG=~/.kube/config && \
+          cd manifests && \
+          sed -i 's/name_app: .*/name_app: ${{ env.IMAGE }}/' values-${{ steps.vars.outputs.branch }}.yaml && \
+          sed -i 's/tag: .*/tag: ${{ github.sha }}/' values-${{ steps.vars.outputs.branch }}.yaml && \
+          sed -i 's/containerPort: .*/containerPort: ${{ env.CONTAINERPORT }}/' values-${{ steps.vars.outputs.branch }}.yaml && \
+          sed -i 's/livenessProbe: .*/livenessProbe: ${{ env.HEALTHCHECK }}/' values-${{ steps.vars.outputs.branch }}.yaml && \
+          sed -i 's/readinessProbe: .*/readinessProbe: ${{ env.HEALTHCHECK }}/' values-${{ steps.vars.outputs.branch }}.yaml && \
+          sed -i 's/nameOverride: .*/nameOverride: ${{ env.IMAGE }}/' values-${{ steps.vars.outputs.branch }}.yaml && \
+          sed -i 's/fullnameOverride: .*/fullnameOverride: ${{ env.IMAGE }}/' values-${{ steps.vars.outputs.branch }}.yaml && \
+          sed -i 's/host: .*/host: ${{ env.HOST }}/' values-${{ steps.vars.outputs.branch }}.yaml && \
+          sed -i 's/values_image_name_app/${{ env.IMAGE }}/g' templates/deployment.yaml && \
+          helm upgrade --install ${{ env.IMAGE }} . -n twist-${{ steps.vars.outputs.branch }} -f values-${{ steps.vars.outputs.branch }}.yaml --create-namespace --force
+
+      - name: "Notify status of failure job"
+        if: ${{ failure() }}
+        run: |
+          curl -X POST -H "Content-Type: application/json" \
+          -d '{"content": "Something in deploy in server of image 📸 ${{ env.IMAGE }}:${{ github.sha }} was wrong! 🚀\nStatus: `${{ job.status }}` 💥👻 \nAutor: @${{ github.actor }}"}' \
+          ${{ secrets.DSC_WH_URL }}
+  
+  discord-notifications:
+    runs-on: ubuntu-latest
+    needs: [deploy-app]
+    steps:
+      - name: Notify Discord
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DSC_WH_URL }}
+          TARGET_BRANCH: develop
+        run: |
+          curl -X POST -H "Content-Type: application/json" \
+          -d '{"content": "Build and deploy in server of app ${{ env.IMAGE }} was succesfully! 🐳🚀\n📸 Image: ${{ env.IMAGE }}:${{ github.sha }}\n👩‍💻 Autor: @${{ github.actor }}  \n📋 Status: `${{ job.status }}` 🍻✅\n🌍 Site: http://${{ env.HOST }}:30080${{ env.HEALTHCHECK }} "}' \
+          ${{ secrets.DSC_WH_URL }}
