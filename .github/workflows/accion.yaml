@@ -4,8 +4,8 @@ name: build-publish-deploy
 # They are provided by a third-party and are governed by
 # separate terms of service, privacy policy, and support
 # documentation.
-on:
-  push:
+on: #lo que desencadena la activacion del workflow
+  push: 
     branches: [ "develop" ]
     # Publish semver tags as releases.
     tags: [ 'v*.*.*' ]
@@ -19,8 +19,25 @@ env:
   HOST: ingsw.shuhariko.com.ar
 
 jobs:
+  testing:
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/develop'
+      steps:
+      - uses: actions/checkout@v3
+      - name: "Build image and publish it 🐳"
+        shell: bash
+        run: |
+          # Building image with binaries
+          cd app && pip install -r requeriments.txt && pytest parserHTML.py
+      - name: "Notify status of failure job"
+        if: ${{ failure() }}
+        run: |
+          curl -X POST -H "Content-Type: application/json" \
+          -d '{"content": "Something in the testing 📸 ${{ env.SERVER }}/${{ secrets.DKR_USR }}/${{ env.IMAGE }}:${{ github.sha }} was wrong! 🐳\nStatus: `${{ job.status }}` 💥👻 \nAutor: @${{ github.actor }}"}' \
+          ${{ secrets.DSC_WH_URL }}
   build-publish-image:
     runs-on: ubuntu-latest
+    needs: [testing]
     if: github.ref == 'refs/heads/develop'
     steps:
       - uses: actions/checkout@v3
