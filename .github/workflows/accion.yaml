@@ -40,7 +40,7 @@ jobs:
 
           # Construct the content body
           $content = @{
-              content = "Something in the testing 📸 was wrong! 🐳`nStatus:  💥👻 `nAutor: "
+              content = "Something in the testing 📸 ${{ env.SERVER }}/${{ secrets.DKR_USR }}/${{ env.IMAGE }}:${{ github.sha }} was wrong! 🐳`nStatus: `${{ job.status }}`  💥👻 `nAutor:@${{ github.actor }} "
           }
 
           # Convert the content body to JSON
