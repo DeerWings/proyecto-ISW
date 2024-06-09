@@ -18,7 +18,7 @@ def browser():
     driver.quit()
 
 def test_title(browser):
-    assert browser.title == "Página prueba v2"
+    assert browser.title == "Página prueba"
 
 if __name__ == '__main__':
     pytest.main()
