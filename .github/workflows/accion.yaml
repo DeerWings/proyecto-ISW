@@ -20,7 +20,7 @@ env:
 
 jobs:
   testing:
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     if: github.ref == 'refs/heads/develop'
     steps:
       - uses: actions/checkout@v3
